@@ -1,15 +1,15 @@
 <idea-plugin>
     <id>com.ide.plugin</id>
-    <name>局域网伙伴</name>
+    <name>LAN‑Partner</name>
     <version>1.0</version>
-    <vendor email="1422820234@qq.com" url="https://github.com/ahuan02">孙某</vendor>
+    <vendor email="1422820234@qq.com" url="https://github.com/ahuan02">Sun Mou</vendor>
 
     <description><![CDATA[
-      局域网聊天与文件传输插件。
-      在同一局域网内，连接服务端后即可进行实时聊天和文件共享。
+      Local area network chat and file‑transfer plugin.
+      After connecting to the server within the same LAN, you can send real‑time messages and share files.
     ]]></description>
     <change-notes><![CDATA[
-      v1.0 - 支持文本聊天、文件传输、在线用户列表
+      v1.0 - Support text chat, file transfer and online user list.
     ]]></change-notes>
 
     <idea-version since-build="232"/>
@@ -27,8 +27,10 @@
     </extensions>
 
     <actions>
-        <action id="sidebarMenuButtonId" class="com.ide.plugin.buttons.SidebarMenuButton" text="局域网伙伴"
-                description="打开局域网聊天面板">
+        <action id="sidebarMenuButtonId"
+                class="com.ide.plugin.buttons.SidebarMenuButton"
+                text="LAN‑Partner"
+                description="Open LAN‑chat panel">
             <add-to-group group-id="HelpMenu" anchor="last"/>
         </action>
     </actions>

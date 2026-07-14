@@ -15,11 +15,11 @@ repositories {
 }
 
 dependencies {
-    // Netty NIO 客户端
+    // Netty NIO Client
     implementation("io.netty:netty-all:4.1.112.Final")
-    // JSON
+    // JSON Parser
     implementation("com.google.code.gson:gson:2.11.0")
-    // UI 动画 (Trident)
+    // UI Animation (Trident)
     implementation("org.pushing-pixels:radiance-animation:8.5.0")
 }
 
@@ -56,40 +56,39 @@ tasks {
         token.set(System.getenv("PUBLISH_TOKEN"))
     }
 
-    // ══════════════════════════════════════
-    //  Fat JAR：插件 class + 所有依赖打入一个 JAR
-    //  产物: build/libs/plugins-1.0-SNAPSHOT-all.jar
-    //  用法: 放入 IDEA 插件目录 (<idea>/plugins/LanPartner/lib/) 即可
-    // ══════════════════════════════════════
+    // ======================================
+    // Fat‑Jar: package plugin classes and all dependencies into one jar file
+    // Output: build/libs/plugins-1.0-SNAPSHOT-all.jar
+    // Usage: put jar under <idea>/plugins/LanPartner/lib/ directory
+    // ======================================
     register<Jar>("fatJar") {
         group = "build"
-        description = "打包 Fat JAR（包含所有依赖）"
+        description = "Build Fat‑Jar with all included dependencies"
         archiveBaseName.set("LanPartner")
         archiveVersion.set("${project.version}")
         archiveClassifier.set("all")
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-        // 插件自身编译产物
+        // Compiled project classes
         from(sourceSets.main.get().output)
 
-        // 合并所有运行时依赖（排除 IntelliJ Platform 自带的，避免冲突）
+        // Merge runtime dependencies, exclude IntelliJ built‑in libraries to avoid conflicts
         from({
             configurations.runtimeClasspath.get()
                 .filter { it.exists() && it.name.endsWith(".jar") }
                 .map { zipTree(it) }
         })
 
-        // 排除数字签名文件（多个 JAR 合并时会冲突）
-        exclude("META-INF/*.SF")
-        exclude("META-INF/*.DSA")
-        exclude("META-INF/*.RSA")
-        exclude("META-INF/*.LIST")
+        // Exclude signature files which cause conflicts after merging multiple jars
+        exclude("META‑INF/*.SF")
+        exclude("META‑INF/*.DSA")
+        exclude("META‑INF/*.RSA")
+        exclude("META‑INF/*.LIST")
         exclude("module-info.class")
 
-        // 保留 plugin.xml（确保不被覆盖）
         manifest {
             attributes(
-                "Implementation-Title" to "局域网伙伴 (LanPartner)",
+                "Implementation-Title" to "LanPartner",
                 "Implementation-Version" to project.version,
                 "Built-By" to "Gradle"
             )
