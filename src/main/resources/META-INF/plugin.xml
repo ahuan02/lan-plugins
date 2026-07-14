@@ -1,0 +1,35 @@
+<idea-plugin>
+    <id>com.ide.plugin</id>
+    <name>局域网伙伴</name>
+    <version>1.0</version>
+    <vendor email="1422820234@qq.com" url="https://github.com/ahuan02">孙某</vendor>
+
+    <description><![CDATA[
+      局域网聊天与文件传输插件。
+      在同一局域网内，连接服务端后即可进行实时聊天和文件共享。
+    ]]></description>
+    <change-notes><![CDATA[
+      v1.0 - 支持文本聊天、文件传输、在线用户列表
+    ]]></change-notes>
+
+    <idea-version since-build="232"/>
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="LanPartnerWindow"
+                    anchor="right"
+                    secondary="false"
+                    icon="AllIcons.General.User"
+                    factoryClass="com.ide.plugin.factory.MyToolWindowFactory"/>
+        <notificationGroup id="LanPartner.Notifications"
+                           displayType="BALLOON"
+                           isLogByDefault="false"/>
+    </extensions>
+
+    <actions>
+        <action id="sidebarMenuButtonId" class="com.ide.plugin.buttons.SidebarMenuButton" text="局域网伙伴"
+                description="打开局域网聊天面板">
+            <add-to-group group-id="HelpMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
