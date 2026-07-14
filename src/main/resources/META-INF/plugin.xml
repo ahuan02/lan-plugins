@@ -1,13 +1,10 @@
 <idea-plugin>
     <id>com.ide.plugin</id>
-    <name>LAN‑Partner</name>
+    <name>Lan Partner</name>
     <version>1.0</version>
     <vendor email="1422820234@qq.com" url="https://github.com/ahuan02">Sun Mou</vendor>
 
-    <description><![CDATA[
-      Local area network chat and file‑transfer plugin.
-      After connecting to the server within the same LAN, you can send real‑time messages and share files.
-    ]]></description>
+    <description><![CDATA[Local area network chat and file transfer plugin for IntelliJ IDEA. Connect to a LAN server to send real-time messages, share files and collaborate with teammates within the same local network.]]></description>
     <change-notes><![CDATA[
       v1.0 - Support text chat, file transfer and online user list.
     ]]></change-notes>
@@ -29,7 +26,7 @@
     <actions>
         <action id="sidebarMenuButtonId"
                 class="com.ide.plugin.buttons.SidebarMenuButton"
-                text="LAN‑Partner"
+                text="Lan Partner"
                 description="Open LAN‑chat panel">
             <add-to-group group-id="HelpMenu" anchor="last"/>
         </action>
