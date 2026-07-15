@@ -4,12 +4,12 @@
     <version>1.0</version>
     <vendor email="1422820234@qq.com" url="https://github.com/ahuan02">Sun Mou</vendor>
 
-    <description><![CDATA[Local area network chat and file transfer plugin for IntelliJ IDEA. Connect to a LAN server to send real-time messages, share files and collaborate with teammates within the same local network.]]></description>
+    <description><![CDATA[Local area network chat and file transfer plugin for IntelliJ IDEA. Connect to a LAN server to send real‑time messages, share files and collaborate with teammates within the same local network.]]></description>
     <change-notes><![CDATA[
       v1.0 - Support text chat, file transfer and online user list.
     ]]></change-notes>
 
-    <idea-version since-build="232"/>
+    <idea-version since-build="200" until-build="261.*"/>
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">

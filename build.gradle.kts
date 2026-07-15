@@ -32,18 +32,17 @@ intellij {
 }
 
 tasks {
-    // Set the JVM compatibility versions
     withType<JavaCompile> {
         sourceCompatibility = "17"
         targetCompatibility = "17"
     }
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
+        kotlinOptions.jvmTarget = "11"
     }
 
     patchPluginXml {
-        sinceBuild.set("232")
-        untilBuild.set("242.*")
+        sinceBuild.set("200")
+        untilBuild.set("261.*")
     }
 
     signPlugin {
