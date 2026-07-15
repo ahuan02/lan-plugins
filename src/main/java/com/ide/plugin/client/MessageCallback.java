@@ -36,4 +36,7 @@ public interface MessageCallback {
 
     /** 连接出错 */
     void onError(String message);
+
+    /** 有人更新了昵称 */
+    void onNicknameUpdate(String clientId, String oldNickname, String newNickname);
 }

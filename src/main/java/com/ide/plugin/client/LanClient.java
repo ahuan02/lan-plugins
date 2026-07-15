@@ -9,11 +9,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.timeout.IdleStateHandler;
+// import io.netty.handler.timeout.IdleStateHandler;  // 局域网不需要僵尸连接检测
 
 import java.nio.ByteOrder;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Netty TCP 客户端 — 连接聊天服务端
@@ -65,7 +64,7 @@ public class LanClient {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
-                                .addLast("idle", new IdleStateHandler(0, 30, 0, TimeUnit.SECONDS))
+                                // .addLast("idle", new IdleStateHandler(0, 30, 0, TimeUnit.SECONDS))  // 局域网不需要
                                 .addLast("frameDecoder", new LengthFieldBasedFrameDecoder(
                                         ByteOrder.BIG_ENDIAN, 100 * 1024 * 1024,
                                         0, 4, 0, 4, true))
@@ -117,6 +116,15 @@ public class LanClient {
         JsonObject obj = new JsonObject();
         obj.addProperty("msgType", "text");
         obj.addProperty("content", content);
+        sendJson(obj);
+    }
+
+    /** 更新昵称，通知服务端并广播给所有人 */
+    public void sendNicknameUpdate(String newNickname) {
+        this.nickname = newNickname;
+        JsonObject obj = new JsonObject();
+        obj.addProperty("msgType", "nickname_update");
+        obj.addProperty("nickname", newNickname);
         sendJson(obj);
     }
 
@@ -213,6 +221,12 @@ public class LanClient {
                     break;
                 case "error":
                     callback.onError(obj.has("message") ? obj.get("message").getAsString() : "未知错误");
+                    break;
+                case "nickname_update":
+                    callback.onNicknameUpdate(
+                            obj.get("clientId").getAsString(),
+                            obj.has("oldNickname") ? obj.get("oldNickname").getAsString() : "",
+                            obj.get("nickname").getAsString());
                     break;
             }
         }

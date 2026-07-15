@@ -136,6 +136,13 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
     private volatile String myClientId;
     private boolean isConnected = false;
 
+    /** cid → 最新昵称（用于消息气泡显示历史消息时展示最新昵称） */
+    private final Map<String, String> latestNicknames = new ConcurrentHashMap<>();
+
+    /** 昵称输入防抖 Timer */
+    private Timer nickDebounceTimer;
+    private static final int NICK_DEBOUNCE_MS = 600;
+
     // ═══════ 未读消息 & 通知 ═══════
     private Project myProject;
     private ToolWindow myToolWindow;
@@ -432,12 +439,20 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
     private void setConnectedState(boolean c) {
         isConnected = c;
         hostField.setEnabled(!c); chatPortField.setEnabled(!c);
-        filePortField.setEnabled(!c); nickField.setEnabled(!c);
+        filePortField.setEnabled(!c);
+        // 昵称框连接后不禁用，允许随时修改
         connectBtn.setEnabled(!c);
         disconnBtn.setEnabled(c);
         inputArea.setEnabled(c);
         sendBtn.setEnabled(c);
         fileChooseBtn.setEnabled(c);
+
+        // 连接后为昵称框加防抖监听，断开时取消
+        if (c) {
+            setupNickDebounce();
+        } else {
+            cancelNickDebounce();
+        }
     }
 
     private void doConnect() {
@@ -445,7 +460,11 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
         String host = hostField.getText().trim();
         String nick = nickField.getText().trim();
         if (host.isEmpty()) { addSys("请先输入服务器地址"); return; }
-        if (nick.isEmpty()) { addSys("请先输入昵称"); return; }
+        // 昵称为空或纯空白时自动填充"未命名"
+        if (nick.isEmpty()) {
+            nick = "未命名";
+            nickField.setText(nick);
+        }
         int chatPort, filePort;
         try { chatPort = Integer.parseInt(chatPortField.getText().trim()); }
         catch (NumberFormatException e) { addSys("聊天端口号格式不正确"); return; }
@@ -453,17 +472,158 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
         catch (NumberFormatException e) { addSys("文件端口号格式不正确"); return; }
 
         setStatus("⏳ 正在连接 " + host + ":" + chatPort + " …", STATUS_WARN);
-        new Thread(() -> client.connect(host, chatPort, nick, filePort), "lan-connect").start();
+        String finalNick = nick;
+        new Thread(() -> client.connect(host, chatPort, finalNick, filePort), "lan-connect").start();
     }
 
     private void doDisconnect() {
         if (!isConnected) return;
+        cancelNickDebounce();
         client.disconnect();
         myClientId = null;
         userMap.clear(); rebuildUserList();
         clearMessages();
         setConnectedState(false);
         setStatus("已断开", TEXT_DIM);
+    }
+
+    // ════════════════════════════════════
+    //  昵称防抖（连接后自动发送更新到服务端）
+    // ════════════════════════════════════
+
+    private void setupNickDebounce() {
+        cancelNickDebounce();
+        nickField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { onNickChanged(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { onNickChanged(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { onNickChanged(); }
+        });
+    }
+
+    private void onNickChanged() {
+        cancelNickDebounce();
+        nickDebounceTimer = new Timer(NICK_DEBOUNCE_MS, e -> {
+            if (client == null || !client.isConnected()) return;
+            String newNick = nickField.getText().trim();
+            if (newNick.isEmpty()) {
+                newNick = "未命名";
+                nickField.setText(newNick);
+            }
+            // 没变化不发
+            if (newNick.equals(client.nickname())) return;
+            String oldNick = client.nickname();
+            client.sendNicknameUpdate(newNick);
+            // 本地也更新 userMap 里自己的昵称
+            if (myClientId != null) {
+                UserEntry me = userMap.get(myClientId);
+                if (me != null) {
+                    userMap.put(myClientId, new UserEntry(me.cid, newNick, me.ip, true));
+                    rebuildUserList();
+                }
+            }
+            // 更新昵称映射
+            if (myClientId != null) {
+                latestNicknames.put(myClientId, newNick);
+            }
+            // 刷新所有历史消息气泡中的昵称显示
+            refreshMessageSenders();
+        });
+        nickDebounceTimer.setRepeats(false);
+        nickDebounceTimer.start();
+    }
+
+    private void cancelNickDebounce() {
+        if (nickDebounceTimer != null) {
+            nickDebounceTimer.stop();
+            nickDebounceTimer = null;
+        }
+    }
+
+    /** 刷新消息列表中所有发送者昵称（用自己的最新昵称替换旧的"我"标签） */
+    private void refreshMessageSenders() {
+        if (messageWidgets.isEmpty()) return;
+        for (JComponent w : messageWidgets) {
+            refreshSenderInWidget(w);
+        }
+        messagePanel.revalidate();
+        messagePanel.repaint();
+    }
+
+    private void refreshSenderInWidget(JComponent comp) {
+        if (comp instanceof ChatPanel.AnimatedWrapper) {
+            ChatPanel.AnimatedWrapper aw = (ChatPanel.AnimatedWrapper) comp;
+            if (aw.getComponentCount() > 0) {
+                refreshBlockPanels(aw.getComponent(0));
+            }
+        }
+    }
+
+    private void refreshBlockPanels(Component outer) {
+        if (!(outer instanceof JPanel)) return;
+        JPanel wrapper = (JPanel) outer;
+        for (Component c : wrapper.getComponents()) {
+            if (c instanceof JPanel) {
+                JPanel block = (JPanel) c;
+                if (block.getLayout() instanceof BoxLayout) {
+                    for (Component cc : block.getComponents()) {
+                        if (cc instanceof JPanel) {
+                            JPanel maybeMeta = (JPanel) cc;
+                            if (maybeMeta.getLayout() instanceof FlowLayout) {
+                                refreshMetaRow(maybeMeta);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void refreshMetaRow(JPanel metaRow) {
+        for (Component c : metaRow.getComponents()) {
+            if (c instanceof JLabel) {
+                JLabel lbl = (JLabel) c;
+                if ("我".equals(lbl.getText())) {
+                    String newName = (client != null) ? client.nickname() : "我";
+                    lbl.setText(newName);
+                }
+            }
+        }
+    }
+
+    /** 把历史消息中某人的旧昵称全部替换为新昵称 */
+    private void refreshSendersByName(String oldName, String newName) {
+        if (oldName == null || oldName.isEmpty()) return;
+        for (JComponent w : messageWidgets) {
+            replaceSenderInWidget(w, oldName, newName);
+        }
+        messagePanel.revalidate();
+        messagePanel.repaint();
+    }
+
+    private void replaceSenderInWidget(JComponent comp, String oldName, String newName) {
+        if (comp instanceof ChatPanel.AnimatedWrapper) {
+            ChatPanel.AnimatedWrapper aw = (ChatPanel.AnimatedWrapper) comp;
+            if (aw.getComponentCount() > 0) {
+                replaceInBlock(aw.getComponent(0), oldName, newName);
+            }
+        }
+    }
+
+    private void replaceInBlock(Component outer, String oldName, String newName) {
+        if (!(outer instanceof JPanel wrapper)) return;
+        for (Component c : wrapper.getComponents()) {
+            if (c instanceof JPanel block && block.getLayout() instanceof BoxLayout) {
+                for (Component cc : block.getComponents()) {
+                    if (cc instanceof JPanel maybeMeta && maybeMeta.getLayout() instanceof FlowLayout) {
+                        for (Component lc : maybeMeta.getComponents()) {
+                            if (lc instanceof JLabel lbl && oldName.equals(lbl.getText())) {
+                                lbl.setText(newName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ════════════════════════════════════
@@ -538,13 +698,19 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
     @Override public void onOnlineUsers(JsonObject msg) {
         SwingUtilities.invokeLater(() -> {
             userMap.clear();
+            Set<String> seenIps = new HashSet<>();
             JsonArray arr = msg.getAsJsonArray("users");
             for (int i = 0; i < arr.size(); i++) {
                 JsonObject u = arr.get(i).getAsJsonObject();
                 String cid  = u.get("clientId").getAsString();
                 String name = u.get("nickname").getAsString();
                 String ip   = u.has("ip") ? u.get("ip").getAsString() : "";
+                String ipHost = extractHost(ip);
+                // 同一IP只保留第一次出现的用户，跳过重复
+                if (!ipHost.isEmpty() && !seenIps.add(ipHost)) continue;
                 userMap.put(cid, new UserEntry(cid, name, ip, cid.equals(myClientId)));
+                // 更新昵称映射
+                latestNicknames.put(cid, name);
             }
             rebuildUserList();
         });
@@ -553,7 +719,11 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
     @Override public void onUserJoin(String cid, String name, String ip) {
         SwingUtilities.invokeLater(() -> {
             if (userMap.containsKey(cid)) return;
+            String ipHost = extractHost(ip);
+            // 同一IP已存在则跳过（可能同一台机器多开了窗口）
+            if (!ipHost.isEmpty() && findUserByIpHost(ipHost) != null) return;
             userMap.put(cid, new UserEntry(cid, name, ip, cid.equals(myClientId)));
+            latestNicknames.put(cid, name);
             rebuildUserList();
             highlightUser(cid, true);
             addSys("👋 " + name + " 加入了聊天");
@@ -566,25 +736,64 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
             highlightUser(cid, false);
             new Timer(800, ev -> { userMap.remove(cid); rebuildUserList(); }) {{ setRepeats(false); start(); }};
             addSys("👋 " + name + " 离开了聊天");
+
+            // 面板收起/隐藏时，右下角气泡通知谁离开了
+            if (myToolWindow == null || !myToolWindow.isVisible()) {
+                showLeaveNotification(name);
+            }
         });
+    }
+
+    /** 面板收起时右下角气泡：通知有人离开 */
+    private void showLeaveNotification(String name) {
+        // 如果已有未读消息气泡，先关掉避免重叠
+        if (lastUnreadNotification != null) {
+            lastUnreadNotification.expire();
+            lastUnreadNotification = null;
+        }
+        // 未读数一并清零 — 用户点"打开查看"时只需看到离开消息
+        unreadCount = 0;
+
+        Notification n = new Notification(
+                "LanPartner.Notifications",
+                "👋 有人离开了",
+                name + " 离开了聊天",
+                NotificationType.INFORMATION
+        );
+        n.addAction(new AnAction("打开查看") {
+            @Override
+            public void actionPerformed(@NotNull AnActionEvent e) {
+                if (myToolWindow != null) {
+                    myToolWindow.show();
+                }
+            }
+        });
+        if (myProject != null) {
+            Notifications.Bus.notify(n, myProject);
+        }
     }
 
     @Override public void onTextMessage(String cid, String name, String content, long ts) {
         SwingUtilities.invokeLater(() -> {
-            appendTextBubble(cid, name, content, ts);
-            if (!cid.equals(myClientId)) onIncomingMessage(name + ": " + content);
+            // 用历史记录中最新的昵称来显示
+            String displayName = latestNicknames.getOrDefault(cid, name);
+            latestNicknames.put(cid, displayName.isEmpty() ? name : displayName);
+            appendTextBubble(cid, displayName, content, ts);
+            if (!cid.equals(myClientId)) onIncomingMessage(displayName + ": " + content);
         });
     }
 
     @Override public void onFileShare(String cid, String name, String fn, long size,
                                        String mime, String url, long ts) {
         SwingUtilities.invokeLater(() -> {
+            String displayName = latestNicknames.getOrDefault(cid, name);
+            latestNicknames.put(cid, displayName.isEmpty() ? name : displayName);
             if (isImageMime(mime)) {
-                appendImagePreview(cid, name, fn, size, url, ts);
+                appendImagePreview(cid, displayName, fn, size, url, ts);
             } else {
-                appendFileCard(cid, name, fn, size, mime, url, ts);
+                appendFileCard(cid, displayName, fn, size, mime, url, ts);
             }
-            if (!cid.equals(myClientId)) onIncomingMessage(name + " 分享了文件 " + fn);
+            if (!cid.equals(myClientId)) onIncomingMessage(displayName + " 分享了文件 " + fn);
         });
     }
 
@@ -599,6 +808,26 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
     }
     @Override public void onError(String msg) {
         SwingUtilities.invokeLater(() -> addSys("! " + msg));
+    }
+
+    @Override public void onNicknameUpdate(String cid, String oldNick, String newNick) {
+        SwingUtilities.invokeLater(() -> {
+            latestNicknames.put(cid, newNick);
+            // 更新用户列表中的昵称
+            UserEntry ue = userMap.get(cid);
+            if (ue != null) {
+                userMap.put(cid, new UserEntry(ue.cid, newNick, ue.ip, ue.isMe));
+                rebuildUserList();
+            }
+            // 刷新他人历史消息气泡中的旧昵称 → 新昵称
+            if (!cid.equals(myClientId)) {
+                refreshSendersByName(oldNick, newNick);
+            } else {
+                refreshMessageSenders(); // 自己的更新"我" → 新昵称
+            }
+            String oldName = (oldNick != null && !oldNick.isEmpty()) ? oldNick : "用户";
+            addSys("✏ " + oldName + " 改名为 " + newNick);
+        });
     }
 
     // ════════════════════════════════════
@@ -1407,7 +1636,23 @@ public class ChatPanel extends JBPanel<ChatPanel> implements MessageCallback, Di
         highlightAlpha.clear();
         highlightKind.clear();
         resetUnreadCount();
+        cancelNickDebounce();
         if (client != null) client.disconnect();
+    }
+
+    /** 从 "ip:port" 中提取纯 IP 地址 */
+    private static String extractHost(String ipAddr) {
+        if (ipAddr == null || ipAddr.isEmpty()) return "";
+        int colon = ipAddr.lastIndexOf(':');
+        return colon > 0 ? ipAddr.substring(0, colon) : ipAddr;
+    }
+
+    /** 在 userMap 中根据纯 IP 查找用户（忽略端口） */
+    private UserEntry findUserByIpHost(String ipHost) {
+        for (UserEntry e : userMap.values()) {
+            if (extractHost(e.ip).equals(ipHost)) return e;
+        }
+        return null;
     }
 
     // ════════════════════════════════════
