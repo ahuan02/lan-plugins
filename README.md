@@ -4,13 +4,13 @@
 
 **局域网伙伴** 是一个 IntelliJ IDEA 插件，让你在 IDE 内部直接进行局域网实时聊天和文件共享，无需切换到外部 IM 工具。
 
-| 属性 | 值 |
-|---|---|
-| 插件名称 | 局域网伙伴 (LanPartner) |
-| 插件 ID | `com.ide.plugin` |
-| 目标 IDE | IntelliJ IDEA 2023.2+ (Community / Ultimate) |
-| Java 版本 | JDK 17 |
-| 协议 | 自定义 TCP 帧协议 + HTTP 文件传输 |
+| 属性 | 值                                            |
+|---|----------------------------------------------|
+| 插件名称 | 局域网伙伴 (LanPartner)                           |
+| 插件 ID | `com.ide.plugin`                             |
+| 目标 IDE | IntelliJ IDEA 2020.1+ (Community / Ultimate) |
+| Java 版本 | JDK 17                                       |
+| 协议 | 自定义 TCP 帧协议 + HTTP 文件传输                      |
 
 ---
 
@@ -27,11 +27,11 @@
 
 ## 环境要求
 
-| 项目 | 要求 |
-|---|---|
-| JDK | **17+** |
-| Gradle | 8.x（IDEA 内置 Gradle 即可） |
-| IntelliJ IDEA | 2023.2 ~ 2024.2 |
+| 项目 | 要求                                         |
+|---|--------------------------------------------|
+| JDK | **11+**                                    |
+| Gradle | 8.x（IDEA 内置 Gradle 即可）                     |
+| IntelliJ IDEA | 2020.1 ~ 2026.1                            |
 | 服务端 | 需要启动 [lan-server](../lan-server/README.md) |
 
 ---
